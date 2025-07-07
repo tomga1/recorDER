@@ -1,0 +1,135 @@
+{
+  "name": "recorDER",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "trigger-schedule",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/your-anon-url",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Tareas",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [220, 0],
+      "id": "get-sheet-rows",
+      "name": "Get row(s) in sheet"
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = new Date();\ntoday.setHours(0,0,0,0);\n\nfunction daysBetween(a, b) {\n  return Math.floor((b - a) / 86400000);\n}\n\nconst items = $input.all();\n\nconst toRun = items.filter(i => {\n  const j = i.json;\n  if (!j.Tarea || !j.Encargado) return false;\n\n  const [dI, mI, yI] = j.FechaInicio.split('/');\n  const start = new Date(`${yI}-${mI}-${dI}`);\n  if (isNaN(start)) return false;\n\n  const lastDateStr = j.UltimoEnvio || j.FechaInicio;\n  const [dL, mL, yL] = lastDateStr.split('/');\n  const lastDate = new Date(`${yL}-${mL}-${dL}`);\n  if (isNaN(lastDate)) return false;\n\n  const freq = Number(j.FrecuenciaDias);\n  if (isNaN(freq) || freq < 0) return false;\n\n  if (freq === 0) return !j.UltimoEnvio;\n\n  if (!j.UltimoEnvio) {\n    return daysBetween(start, today) >= 0;\n  }\n\n  return daysBetween(lastDate, today) >= freq;\n});\n\nreturn toRun.map(i => ({ json: i.json }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "id": "filter-code",
+      "name": "Code",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.IdChat}}",
+        "text": "=🔔 *Tarea pendiente*\n📋 Tarea: {{$json.Tarea}}   \n👤 Encargado: {{$json.Encargado}}\n\nSe solicita revisión y seguimiento correspondiente.  \nMuchas gracias! ✅🗂️😁",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [660, -20],
+      "id": "send-telegram",
+      "name": "Send a text message",
+      "alwaysOutputData": false,
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "telegramApi": {
+          "id": "__REDACTED__",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/your-anon-url",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 123456789,
+          "mode": "list",
+          "cachedResultName": "Tareas",
+          "cachedResultUrl": "https://docs.google.com/your-anon-url#gid=123456789"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "FechaInicio": "={{ $('Code').item.json.ProximoAviso }}",
+            "row_number": "={{ $('Code').item.json.row_number }}"
+          },
+          "matchingColumns": ["row_number"],
+          "schema": [
+            {"id": "FechaInicio", "displayName": "FechaInicio", "type": "string", "canBeUsedToMatch": true},
+            {"id": "row_number", "displayName": "row_number", "type": "string", "canBeUsedToMatch": true}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [840, -200],
+      "id": "update-sheet-row",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "__REDACTED__",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{ "node": "Get row(s) in sheet", "type": "main", "index": 0 }]]
+    },
+    "Get row(s) in sheet": {
+      "main": [[{ "node": "Code", "type": "main", "index": 0 }]]
+    },
+    "Code": {
+      "main": [[{ "node": "Send a text message", "type": "main", "index": 0 }]]
+    },
+    "Send a text message": {
+      "main": [[{ "node": "Update row in sheet", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "anon-workflow",
+  "tags": []
+}
